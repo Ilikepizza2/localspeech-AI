@@ -1,6 +1,6 @@
 # LocalSpeech
 
-LocalSpeech is a project that sets up and runs AI-powered speech models with just one command. All voice models are setup in openai client sdk format. This guide provides step-by-step instructions to install all dependencies, set up the environment, and run both backend and playground services.
+LocalSpeech is a project that sets up and runs AI-powered speech models with just one command on MacOS. All voice models are setup in openai client sdk format. This guide provides step-by-step instructions to install all dependencies, set up the environment, and run both backend and playground services.
 
 ## Prerequisites
 Ensure you have the following installed before proceeding:
@@ -70,6 +70,7 @@ This script:
 - Kokoro TTS
 - Spark TTS
 - Zonos TTS
+- Sesame CSM (Coming soon)
 
 ## Additional Notes
 - If the backend folder exists but the Conda environment does not, the script will delete the folder and re-clone it.
