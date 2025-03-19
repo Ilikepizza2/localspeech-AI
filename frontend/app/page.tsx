@@ -21,6 +21,17 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 
+// Define types for our messages and API responses
+interface SesameMessage {
+  text: string;
+  speaker: number;
+  maxLen: number;
+}
+
+interface SesameApiResponse extends OpenAI.Chat.Completions.ChatCompletion {
+  combined_audio: string;
+}
+
 export default function Home() {
   const [loading, setLoading] = useState(false)
   const [audioUrl, setAudioUrl] = useState<string | null>(null)
@@ -48,6 +59,10 @@ export default function Home() {
   const [kokoroVoice, setKokoroVoice] = useState("af_heart")
   const [kokoroLangCode, setKokoroLangCode] = useState("a")
   const [kokoroSpeed, setKokoroSpeed] = useState(1)
+  // Sesame specific state
+  const [sesameMessages, setSesameMessages] = useState([{ text: "", speaker: 4, maxLen: 3000 }])
+  const [sesameTemp, setSesameTemp] = useState(0.2)
+  const [sesameMinP, setSesameMinP] = useState(0.8)
 
   // Whisper Transcription state
   const [transcriptionAudio, setTranscriptionAudio] = useState<File | null>(null)
@@ -172,7 +187,8 @@ export default function Home() {
   }
 
   const handleVoiceCreate = async () => {
-    if (!createText) return
+    if (createModel !== "sesame" && !createText) return
+    if (createModel === "sesame" && !sesameMessages.some(msg => msg.text.trim())) return
 
     setLoading(true)
     setAudioUrl(null)
@@ -181,6 +197,7 @@ export default function Home() {
       // Configure audio parameters based on selected model
       let audioParams: any = {}
       let modelName = ""
+      let messages: Array<any> = []
       
       if (createModel === "spark-tts") {
         modelName = "spark-tts"
@@ -190,6 +207,14 @@ export default function Home() {
           pitch: createPitch,
           speed: createSpeed
         }
+        messages = [
+          {
+            role: "user",
+            content: [
+              { type: "text", text: createText }
+            ]
+          }
+        ]
       } else if (createModel === "zonos") {
         modelName = "zonos"
         audioParams = {
@@ -199,6 +224,14 @@ export default function Home() {
           speaking_rate: zonoSpeakingRate,
           emotion: zonoEmotion
         }
+        messages = [
+          {
+            role: "user",
+            content: [
+              { type: "text", text: createText }
+            ]
+          }
+        ]
       } else if (createModel === "kokoro-tts") {
         modelName = "kokoro-tts"
         audioParams = {
@@ -207,14 +240,7 @@ export default function Home() {
           lang_code: kokoroLangCode,
           speed: kokoroSpeed
         }
-      }
-
-      // @ts-ignore - Ignoring type errors for custom API
-      const response = await client.chat.completions.create({
-        model: modelName,
-        modalities: ["text", "audio"],
-        audio: audioParams,
-        messages: [
+        messages = [
           {
             role: "user",
             content: [
@@ -222,9 +248,42 @@ export default function Home() {
             ]
           }
         ]
+      } else if (createModel === "sesame") {
+        modelName = "csm-1b"
+        const filteredMessages = sesameMessages.filter(msg => msg.text.trim() !== "")
+        
+        messages = filteredMessages.map(msg => ({
+          role: "user",
+          text: msg.text
+        }))
+        
+        audioParams = {
+          speakers: filteredMessages.map(msg => msg.speaker),
+          format: "wav",
+          temp: sesameTemp,
+          min_p: sesameMinP,
+          max_audio_lens: filteredMessages.map(msg => msg.maxLen)
+        }
+      }
+
+      // @ts-ignore - Ignoring type errors for custom API
+      const response = await client.chat.completions.create({
+        model: modelName,
+        modalities: createModel === "sesame" ? undefined : ["text", "audio"],
+        audio: audioParams,
+        messages: messages
       })
 
-      const audioData = response.choices[0].message.audio?.data
+      let audioData = null
+      
+      if (createModel === "sesame") {
+        // Handle sesame response which has combined_audio
+        const sesameResponse = response as unknown as SesameApiResponse;
+        audioData = sesameResponse.combined_audio;
+      } else {
+        // Handle standard response with audio in the first choice
+        audioData = response.choices[0].message.audio?.data
+      }
       
       if (audioData) {
         // Convert base64 to blob
@@ -591,6 +650,128 @@ export default function Home() {
           </div>
         </>
       )
+    } else if (createModel === "sesame") {
+      return (
+        <>
+          <div className="space-y-4">
+            <div className="flex justify-between items-center">
+              <Label>Conversation Messages</Label>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => setSesameMessages([...sesameMessages, { text: "", speaker: 4, maxLen: 3000 }])}
+              >
+                Add Message
+              </Button>
+            </div>
+            
+            {sesameMessages.map((message, index) => (
+              <div key={index} className="p-3 border rounded-md space-y-3">
+                <div className="flex justify-between items-center">
+                  <Label>Message {index + 1}</Label>
+                  {sesameMessages.length > 1 && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        const newMessages = [...sesameMessages]
+                        newMessages.splice(index, 1)
+                        setSesameMessages(newMessages)
+                      }}
+                    >
+                      Remove
+                    </Button>
+                  )}
+                </div>
+                
+                <Textarea
+                  placeholder="Enter message text..."
+                  value={message.text}
+                  onChange={(e) => {
+                    const newMessages = [...sesameMessages]
+                    newMessages[index].text = e.target.value
+                    setSesameMessages(newMessages)
+                  }}
+                  className="h-20"
+                />
+                
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label>Speaker ID</Label>
+                    <Select 
+                      value={String(message.speaker)}
+                      onValueChange={(value) => {
+                        const newMessages = [...sesameMessages]
+                        newMessages[index].speaker = parseInt(value)
+                        setSesameMessages(newMessages)
+                      }}
+                    >
+                      <SelectTrigger className="w-full mt-1">
+                        <SelectValue placeholder="Select speaker" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="1">Speaker 1</SelectItem>
+                        <SelectItem value="2">Speaker 2</SelectItem>
+                        <SelectItem value="3">Speaker 3</SelectItem>
+                        <SelectItem value="4">Speaker 4</SelectItem>
+                        <SelectItem value="5">Speaker 5</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div>
+                    <Label>Max Length</Label>
+                    <Input
+                      type="number"
+                      value={message.maxLen}
+                      onChange={(e) => {
+                        const newMessages = [...sesameMessages]
+                        newMessages[index].maxLen = parseInt(e.target.value) || 0
+                        setSesameMessages(newMessages)
+                      }}
+                      className="mt-1"
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          
+          <div>
+            <Label>Expressiveness (0-1) - {sesameTemp}</Label>
+            <Slider
+              value={[sesameTemp]}
+              min={0}
+              max={1}
+              step={0.1}
+              onValueChange={(value) => setSesameTemp(value[0])}
+              className="my-2"
+            />
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span>Less (0.0)</span>
+              <span>Default (0.2)</span>
+              <span>More (1.0)</span>
+            </div>
+          </div>
+          
+          <div>
+            <Label>Speech Clarity (0-1) - {sesameMinP}</Label>
+            <Slider
+              value={[sesameMinP]}
+              min={0}
+              max={1}
+              step={0.1}
+              onValueChange={(value) => setSesameMinP(value[0])}
+              className="my-2"
+            />
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span>Less (0.0)</span>
+              <span>Default (0.8)</span>
+              <span>More (1.0)</span>
+            </div>
+          </div>
+        </>
+      )
     }
     
     return null
@@ -694,24 +875,27 @@ export default function Home() {
                   <SelectItem value="spark-tts">Spark TTS</SelectItem>
                   <SelectItem value="zonos">Zonos</SelectItem>
                   <SelectItem value="kokoro-tts">Kokoro TTS</SelectItem>
+                  <SelectItem value="sesame">Sesame TTS</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
-            <div>
-              <Label htmlFor="create-text">Text to Convert</Label>
-              <Textarea
-                id="create-text"
-                placeholder="Enter text to convert to speech..."
-                value={createText}
-                onChange={(e) => setCreateText(e.target.value)}
-                className="h-32"
-              />
-            </div>
+            {createModel !== "sesame" && (
+              <div>
+                <Label htmlFor="create-text">Text to Convert</Label>
+                <Textarea
+                  id="create-text"
+                  placeholder="Enter text to convert to speech..."
+                  value={createText}
+                  onChange={(e) => setCreateText(e.target.value)}
+                  className="h-32"
+                />
+              </div>
+            )}
 
             {renderCreateModelControls()}
 
-            <Button onClick={handleVoiceCreate} disabled={loading || !createText} className="w-full">
+            <Button onClick={handleVoiceCreate} disabled={loading || (createModel !== "sesame" && !createText) || (createModel === "sesame" && !sesameMessages.some(msg => msg.text.trim()))} className="w-full">
               {loading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
