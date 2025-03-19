@@ -70,7 +70,7 @@ This script:
 - Kokoro TTS
 - Spark TTS
 - Zonos TTS
-- Sesame CSM (Coming soon)
+- Sesame CSM 
 
 ## Additional Notes
 - If the backend folder exists but the Conda environment does not, the script will delete the folder and re-clone it.
