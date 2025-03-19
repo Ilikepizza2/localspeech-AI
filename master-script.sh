@@ -2,7 +2,7 @@
 
 # Prompt user for model selection
 echo "Select a model to run:"
-select MODEL in "kokoro" "zonos" "whisper" "spark"; do
+select MODEL in "kokoro" "zonos" "whisper" "spark" "sesame" ; do
     if [[ -n "$MODEL" ]]; then
         break
     else
@@ -38,6 +38,11 @@ elif [[ "$MODEL" == "spark" ]]; then
     REPO="https://github.com/Ilikepizza2/sparktts-openai.git"
     ENV_NAME="spark"
     DEPENDENCIES="pip install -r requirements.txt && git lfs install && git clone https://huggingface.co/SparkAudio/Spark-TTS-0.5B pretrained_models/Spark-TTS-0.5B"
+
+elif [[ "$MODEL" == "sesame" ]]; then
+    REPO="https://github.com/Ilikepizza2/sesame-openai.git/"
+    ENV_NAME="sesame"
+    DEPENDENCIES="pip install git+https://github.com/senstella/csm-mlx && pip install -r requirements.txt"
 
 else
     echo "Invalid selection."

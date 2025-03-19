@@ -61,8 +61,8 @@ export default function Home() {
   const [kokoroSpeed, setKokoroSpeed] = useState(1)
   // Sesame specific state
   const [sesameMessages, setSesameMessages] = useState([{ text: "", speaker: 4, maxLen: 3000 }])
-  const [sesameTemp, setSesameTemp] = useState(0.2)
-  const [sesameMinP, setSesameMinP] = useState(0.8)
+  const [sesameTemp, setSesameTemp] = useState(0.4)
+  const [sesameMinP, setSesameMinP] = useState(0.1)
 
   // Whisper Transcription state
   const [transcriptionAudio, setTranscriptionAudio] = useState<File | null>(null)
@@ -760,7 +760,7 @@ export default function Home() {
               value={[sesameMinP]}
               min={0}
               max={1}
-              step={0.1}
+              step={0.01}
               onValueChange={(value) => setSesameMinP(value[0])}
               className="my-2"
             />
